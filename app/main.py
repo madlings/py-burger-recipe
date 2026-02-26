@@ -1,78 +1,52 @@
-from __future__ import annotations
-from typing import Any, Iterable, Optional, Type, Union, overload
+from abc import ABC, abstractmethod
 
+class Validator(ABC):
+    def __set_name__(self, owner, name):
+        # Store the protected name (e.g., "_buns")
+        self.protected_name = "_" + name
 
-class Validator:
-    """Base descriptor for attribute validation with type hints."""
-
-    protected_name: str
-
-    def __set_name__(self, owner: Type[object], name: str) -> None:
-        self.protected_name = f"_{name}"
-
-    @overload
-    def __get__(self, instance: None, owner: Type[object]) -> Validator:
+    def __get__(self, instance, owner):
         if instance is None:
             return self
         return getattr(instance, self.protected_name)
 
-    @overload
-    def __get__(self, instance: object, owner: Type[object]) -> Any:
+    def __set__(self, instance, value):
+        # Call validation before setting the value
         self.validate(value)
         setattr(instance, self.protected_name, value)
 
-    def __get__(
-        self,
-        instance: Optional[object],
-        owner: Type[object]
-    ) -> Union[Validator, Any]:
-        if instance is None:
-            return self
-        return getattr(instance, self.protected_name)
-
-    def __set__(self, instance: object, value: Any) -> None:
-        self.validate(value)
-        setattr(instance, self.protected_name, value)
-
-    def validate(self, value: Any) -> None:
-        """Abstract method for subclasses to implement."""
-        raise NotImplementedError("Subclasses must implement validate().")
+    @abstractmethod
+    def validate(self, value):
+        """Subclasses must implement actual checks."""
+        pass
 
 
 class Number(Validator):
-    """Descriptor to validate integer ranges."""
+    def __init__(self, min_value, max_value):
+        self.min_value = min_value
+        self.max_value = max_value
 
-    def __init__(self, min_value: int, max_value: int) -> None:
-        self.min_value: int = min_value
-        self.max_value: int = max_value
-
-    def validate(self, value: Any) -> None:
+    def validate(self, value):
         if not isinstance(value, int):
             raise TypeError("Quantity should be integer.")
         if not (self.min_value <= value <= self.max_value):
             raise ValueError(
-                f"Quantity should not be less than {self.min_value} "
-                f"and greater than {self.max_value}."
+                f"Quantity should not be less than {self.min_value} and "
+                f"greater than {self.max_value}."
             )
 
 
 class OneOf(Validator):
-    """Descriptor to validate value is within a specific set of options."""
+    def __init__(self, options):
+        self.options = options
 
-    def __init__(self, options: Iterable[str]) -> None:
-        self.options: Iterable[str] = options
-
-    def validate(self, value: Any) -> None:
+    def validate(self, value):
         if value not in self.options:
-            raise ValueError(
-                f"Expected {value} to be one of {self.options}."
-            )
+            raise ValueError(f"Expected {value} to be one of {self.options}.")
 
 
 class BurgerRecipe:
-    """Class representing a burger recipe with type-hinted attributes."""
-
-    # Descriptor declarations as class attributes
+    # Defining descriptors as class attributes
     buns = Number(2, 3)
     cheese = Number(0, 2)
     tomatoes = Number(0, 3)
@@ -80,18 +54,11 @@ class BurgerRecipe:
     eggs = Number(0, 2)
     sauce = OneOf(("ketchup", "mayo", "burger"))
 
-    def __init__(
-        self,
-        buns: int,
-        cheese: int,
-        tomatoes: int,
-        cutlets: int,
-        eggs: int,
-        sauce: str
-    ) -> None:
-        self.buns: int = buns
-        self.cheese: int = cheese
-        self.tomatoes: int = tomatoes
-        self.cutlets: int = cutlets
-        self.eggs: int = eggs
-        self.sauce: str = sauce
+    def __init__(self, buns, cheese, tomatoes, cutlets, eggs, sauce):
+        # Setting these triggers the descriptors' __set__ methods
+        self.buns = buns
+        self.cheese = cheese
+        self.tomatoes = tomatoes
+        self.cutlets = cutlets
+        self.eggs = eggs
+        self.sauce = sauce
